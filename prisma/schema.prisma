@@ -28,15 +28,15 @@ model Keyword {
 
 model NewsItem {
   id          String   @id @default(uuid())
-  title       String
-  summary     String
-  sourceUrl   String
+  title       String   @db.Text
+  summary     String   @db.Text
+  sourceUrl   String   @db.Text
   sourceName  String
   publishedAt DateTime
-  documentRef String?
-  taxType     String?
-  subject     String?
-  position    String?
+  documentRef String?  @db.Text
+  taxType     String?  @db.Text
+  subject     String?  @db.Text
+  position    String?  @db.Text
   source      Source   @relation(fields: [sourceId], references: [id])
   sourceId    String
   keywords    Keyword[] @relation("NewsItemKeywords")

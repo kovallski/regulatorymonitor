@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type Keyword, type NewsItem } from '../../client/api';
+import { apiClient, type Keyword, type NewsItem, type NewsResponse } from '../../client/api';
 import { useToast } from '../../client/utils';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
@@ -10,7 +10,8 @@ import { Separator } from '../../components/ui/separator';
 import { Skeleton } from '../../components/ui/skeleton';
 import { DatePicker } from '../../components/ui/date-picker';
 import { Badge } from '../../components/ui/badge';
-import { Filter, ChevronRight, FileText } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Filter, ChevronRight, FileText, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
 
 function Dashboard() {
   const queryClient = useQueryClient();
@@ -19,22 +20,83 @@ function Dashboard() {
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [filterKeywords, setFilterKeywords] = useState<string>("");
   const [sourceType, setSourceType] = useState<string | undefined>(undefined);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
+
+  // Загружаем фильтры из localStorage при инициализации
+  useEffect(() => {
+    const savedDateFrom = localStorage.getItem('dateFrom');
+    const savedDateTo = localStorage.getItem('dateTo');
+    const savedKeywords = localStorage.getItem('filterKeywords');
+    const savedSourceType = localStorage.getItem('sourceType');
+    const savedItemsPerPage = localStorage.getItem('itemsPerPage');
+    
+    if (savedDateFrom) setDateFrom(new Date(savedDateFrom));
+    if (savedDateTo) setDateTo(new Date(savedDateTo));
+    if (savedKeywords) setFilterKeywords(savedKeywords);
+    if (savedSourceType) setSourceType(savedSourceType);
+    if (savedItemsPerPage) setItemsPerPage(parseInt(savedItemsPerPage));
+  }, []);
+
+  // Сохраняем фильтры в localStorage при их изменении
+  useEffect(() => {
+    if (dateFrom) {
+      localStorage.setItem('dateFrom', dateFrom.toISOString());
+    } else {
+      localStorage.removeItem('dateFrom');
+    }
+    setCurrentPage(1); // Сбрасываем страницу при изменении фильтров
+  }, [dateFrom]);
+
+  useEffect(() => {
+    if (dateTo) {
+      localStorage.setItem('dateTo', dateTo.toISOString());
+    } else {
+      localStorage.removeItem('dateTo');
+    }
+    setCurrentPage(1); // Сбрасываем страницу при изменении фильтров
+  }, [dateTo]);
+
+  useEffect(() => {
+    if (filterKeywords) {
+      localStorage.setItem('filterKeywords', filterKeywords);
+    } else {
+      localStorage.removeItem('filterKeywords');
+    }
+    setCurrentPage(1); // Сбрасываем страницу при изменении фильтров
+  }, [filterKeywords]);
+
+  useEffect(() => {
+    if (sourceType) {
+      localStorage.setItem('sourceType', sourceType);
+    } else {
+      localStorage.removeItem('sourceType');
+    }
+    setCurrentPage(1); // Сбрасываем страницу при изменении фильтров
+  }, [sourceType]);
 
   // Fetch news
-  const { data: newsItems = [], isLoading: isLoadingNews, error: newsError } = useQuery<NewsItem[]>({
-    queryKey: ['news', { dateFrom, dateTo, filterKeywords, sourceType }],
+  const { data: newsResponse, isLoading: isLoadingNews, error: newsError } = useQuery<NewsResponse>({
+    queryKey: ['news', { dateFrom, dateTo, filterKeywords, sourceType, currentPage, itemsPerPage }],
     queryFn: () => apiClient.getNews({
       dateFrom: dateFrom?.toISOString(),
       dateTo: dateTo?.toISOString(),
       keywords: filterKeywords ? filterKeywords.split(',').map(k => k.trim()) : undefined,
       sourceType,
+      page: currentPage,
+      limit: itemsPerPage,
     }),
   });
+
+  // Извлекаем данные из ответа
+  const newsItems = newsResponse?.items || [];
+  const pagination = newsResponse?.pagination;
 
   // Debug logging
   console.log('Dashboard - isLoadingNews:', isLoadingNews);
   console.log('Dashboard - newsItems count:', newsItems.length);
   console.log('Dashboard - newsError:', newsError);
+  console.log('Dashboard - pagination:', pagination);
   if (newsItems.length > 0) {
     console.log('Dashboard - first news item:', newsItems[0]);
   }
@@ -106,7 +168,12 @@ function Dashboard() {
 
   const handleFetchNews = () => {
     if (fetchNewsMutation.isPending) return;
-    fetchNewsMutation.mutate();
+    fetchNewsMutation.mutate({
+      dateFrom: dateFrom?.toISOString(),
+      dateTo: dateTo?.toISOString(),
+      keywords: filterKeywords ? filterKeywords.split(',').map(k => k.trim()) : undefined,
+      sourceType,
+    });
   };
 
   const handleExport = () => {
@@ -116,6 +183,25 @@ function Dashboard() {
       dateTo: dateTo?.toISOString(),
       keywords: filterKeywords ? filterKeywords.split(',').map(k => k.trim()) : undefined,
     });
+  };
+
+  const handleResetFilters = () => {
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    setFilterKeywords("");
+    setSourceType(undefined);
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (value: string) => {
+    const newLimit = parseInt(value);
+    setItemsPerPage(newLimit);
+    setCurrentPage(1); // Сбрасываем на первую страницу при изменении количества элементов
+    localStorage.setItem('itemsPerPage', newLimit.toString());
   };
 
   return (
@@ -149,10 +235,20 @@ function Dashboard() {
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            <Filter className="mr-2 h-4 w-4" />
-            Фильтры
-          </CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-lg flex items-center">
+              <Filter className="mr-2 h-4 w-4" />
+              Фильтры
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetFilters}
+              className="text-xs"
+            >
+              Сбросить фильтры
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -253,7 +349,8 @@ function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          newsItems.map((item) => (
+          <>
+            {newsItems.map((item) => (
             <Card key={item.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -269,7 +366,7 @@ function Dashboard() {
                       </a>
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      {new Date(item.publishedAt).toLocaleString()}
+                      {new Date(item.publishedAt).toLocaleDateString('ru-RU')}
                     </CardDescription>
                   </div>
                   <Badge variant="outline">{item.sourceName}</Badge>
@@ -282,7 +379,85 @@ function Dashboard() {
                 ))} */}
               </CardContent>
             </Card>
-          ))
+          ))}
+
+          {/* Пагинация */}
+          {pagination && newsItems.length > 0 && (
+            <Card>
+              <CardContent className="py-4">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="itemsPerPage" className="text-sm">Показать:</Label>
+                    <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                      <SelectTrigger className="w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-sm text-muted-foreground">
+                      из {pagination.total} новостей
+                    </span>
+                  </div>
+
+                  {pagination.totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pagination.page - 1)}
+                        disabled={!pagination.hasPrev}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Назад
+                      </Button>
+                      
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (pagination.totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (pagination.page <= 3) {
+                            pageNum = i + 1;
+                          } else if (pagination.page >= pagination.totalPages - 2) {
+                            pageNum = pagination.totalPages - 4 + i;
+                          } else {
+                            pageNum = pagination.page - 2 + i;
+                          }
+                          
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={pagination.page === pageNum ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(pageNum)}
+                              className="w-8 h-8"
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(pagination.page + 1)}
+                        disabled={!pagination.hasNext}
+                      >
+                        Вперед
+                        <ChevronRightIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
         )}
       </div>
     </div>

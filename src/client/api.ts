@@ -28,6 +28,20 @@ export const NewsItemSchema = z.object({
   publishedAt: z.string().transform((str) => new Date(str))
 });
 
+export const PaginationSchema = z.object({
+  page: z.number(),
+  limit: z.number(),
+  total: z.number(),
+  totalPages: z.number(),
+  hasNext: z.boolean(),
+  hasPrev: z.boolean()
+});
+
+export const NewsResponseSchema = z.object({
+  items: z.array(NewsItemSchema),
+  pagination: PaginationSchema
+});
+
 export const ReportSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -50,6 +64,8 @@ export const EmailSettingsSchema = z.object({
 export type Source = z.infer<typeof SourceSchema>;
 export type Keyword = z.infer<typeof KeywordSchema>;
 export type NewsItem = z.infer<typeof NewsItemSchema>;
+export type Pagination = z.infer<typeof PaginationSchema>;
+export type NewsResponse = z.infer<typeof NewsResponseSchema>;
 export type Report = z.infer<typeof ReportSchema>;
 export type EmailSettings = z.infer<typeof EmailSettingsSchema>;
 
@@ -92,10 +108,21 @@ export const apiClient = {
     await fetch(`/api/sources/${id}`, { method: 'DELETE' });
   },
 
-  parseSource: async ({ id }: { id: string }): Promise<{ message: string; sourceId: string; status: string }> => {
+  parseSource: async ({ 
+    id, 
+    dateFrom, 
+    dateTo, 
+    limit 
+  }: { 
+    id: string; 
+    dateFrom?: string; 
+    dateTo?: string; 
+    limit?: number; 
+  }): Promise<{ message: string; sourceId: string; status: string; count?: number; filters?: any }> => {
     const response = await fetch(`/api/sources/${id}/parse`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateFrom, dateTo, limit })
     });
     const data = await response.json();
     return data;
@@ -133,25 +160,38 @@ export const apiClient = {
   },
 
   // Новости
-  getNews: async ({ dateFrom, dateTo, keywords, sourceType }: {
+  getNews: async ({ dateFrom, dateTo, keywords, sourceType, page = 1, limit = 10 }: {
     dateFrom?: string;
     dateTo?: string;
     keywords?: string[];
     sourceType?: string;
-  }): Promise<NewsItem[]> => {
+    page?: number;
+    limit?: number;
+  }): Promise<NewsResponse> => {
     const params = new URLSearchParams();
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
     if (keywords && keywords.length > 0) params.append('keywords', keywords.join(','));
     if (sourceType) params.append('sourceType', sourceType);
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
 
     const response = await fetch(`/api/news?${params.toString()}`);
     const data = await response.json();
-    return z.array(NewsItemSchema).parse(data);
+    return NewsResponseSchema.parse(data);
   },
 
-  fetchAndProcessNews: async (): Promise<{ taskId: string | null; message: string; status: string }> => {
-    const response = await fetch('/api/news/fetch', { method: 'POST' });
+  fetchAndProcessNews: async ({ dateFrom, dateTo, keywords, sourceType }: {
+    dateFrom?: string;
+    dateTo?: string;
+    keywords?: string[];
+    sourceType?: string;
+  } = {}): Promise<{ taskId: string | null; message: string; status: string }> => {
+    const response = await fetch('/api/news/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateFrom, dateTo, keywords, sourceType })
+    });
     const data = await response.json();
     return data;
   },
