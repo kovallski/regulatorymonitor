@@ -268,7 +268,23 @@ function Settings() {
   };
 
   const handleParseSource = (id: string) => {
-    parseSourceMutation.mutate({ id });
+    // Получаем фильтры из URL параметров или localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const dateFrom = urlParams.get('dateFrom') || localStorage.getItem('dateFrom') || undefined;
+    const dateTo = urlParams.get('dateTo') || localStorage.getItem('dateTo') || undefined;
+    const limit = urlParams.get('limit') || localStorage.getItem('limit') || undefined;
+    
+    // Парсим лимит как число
+    const parsedLimit = limit ? parseInt(limit) : undefined;
+    
+    console.log(`Парсинг источника ${id} с фильтрами:`, { dateFrom, dateTo, limit: parsedLimit });
+    
+    parseSourceMutation.mutate({ 
+      id, 
+      dateFrom, 
+      dateTo, 
+      limit: parsedLimit 
+    });
   };
 
   const websiteSources = sources.filter((source) => source.type === "website");
