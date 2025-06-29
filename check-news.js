@@ -4,7 +4,53 @@ const prisma = new PrismaClient();
 
 async function checkNews() {
   try {
-    console.log('=== Проверка новостей с 1 июня 2025 ===');
+    console.log('=== Проверка новостей с 1-4 июня 2025 ===');
+    
+    // Получаем новости с 1-4 июня 2025
+    const newsFromJune1to4 = await prisma.newsItem.findMany({
+      where: {
+        publishedAt: {
+          gte: new Date('2025-06-01'),
+          lte: new Date('2025-06-04')
+        }
+      },
+      orderBy: {
+        publishedAt: 'asc'
+      },
+      select: {
+        id: true,
+        title: true,
+        publishedAt: true,
+        sourceName: true,
+        sourceUrl: true
+      }
+    });
+
+    console.log(`Найдено ${newsFromJune1to4.length} новостей с 1-4 июня 2025:`);
+    
+    if (newsFromJune1to4.length === 0) {
+      console.log('❌ Новостей с 1-4 июня НЕТ в базе данных');
+    } else {
+      // Группируем по датам
+      const groupedByDate = {};
+      newsFromJune1to4.forEach(news => {
+        const date = news.publishedAt.toLocaleDateString('ru-RU');
+        if (!groupedByDate[date]) {
+          groupedByDate[date] = [];
+        }
+        groupedByDate[date].push(news);
+      });
+
+      // Выводим по датам
+      Object.keys(groupedByDate).sort().forEach(date => {
+        console.log(`\n${date} (${groupedByDate[date].length} новостей):`);
+        groupedByDate[date].forEach(news => {
+          console.log(`  - ${news.title} (${news.sourceName})`);
+        });
+      });
+    }
+
+    console.log('\n=== Проверка новостей с 1 июня 2025 ===');
     
     // Получаем все новости с 1 июня 2025
     const newsFromJune1 = await prisma.newsItem.findMany({
