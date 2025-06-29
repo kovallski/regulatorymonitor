@@ -1,30 +1,47 @@
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient();
+
 async function clearNews() {
   try {
-    console.log('Очищаем новости из базы данных...');
+    console.log('=== Очистка старых новостей Минфина ===');
     
-    // Получаем все новости
-    const response = await fetch('http://localhost:3001/api/news');
-    const news = await response.json();
-    
-    console.log(`Найдено ${news.length} новостей для удаления`);
-    
-    // Удаляем каждую новость (в реальном приложении лучше сделать bulk delete)
-    for (const item of news) {
-      const deleteResponse = await fetch(`http://localhost:3001/api/news/${item.id}`, {
-        method: 'DELETE'
-      });
-      
-      if (deleteResponse.ok) {
-        console.log(`Удалена новость: ${item.title}`);
-      } else {
-        console.log(`Ошибка удаления: ${item.title}`);
+    // Получаем количество новостей перед удалением
+    const countBefore = await prisma.newsItem.count({
+      where: {
+        sourceName: 'Минфин'
       }
+    });
+    
+    console.log(`Найдено ${countBefore} новостей Минфина для удаления`);
+    
+    if (countBefore === 0) {
+      console.log('Новости для удаления не найдены');
+      return;
     }
     
-    console.log('Очистка завершена');
+    // Удаляем все новости Минфина
+    const result = await prisma.newsItem.deleteMany({
+      where: {
+        sourceName: 'Минфин'
+      }
+    });
+    
+    console.log(`✅ Удалено ${result.count} новостей Минфина`);
+    
+    // Проверяем количество после удаления
+    const countAfter = await prisma.newsItem.count({
+      where: {
+        sourceName: 'Минфин'
+      }
+    });
+    
+    console.log(`Осталось новостей Минфина: ${countAfter}`);
     
   } catch (error) {
-    console.error('Ошибка:', error.message);
+    console.error('Ошибка при очистке новостей:', error);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

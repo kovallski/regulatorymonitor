@@ -83,11 +83,32 @@ export class ParsingService {
             }
           }
           return cards.map(card => {
-            // Заголовок
-            const titleEl = card.querySelector('.document_title, .title, h3, h4, a[href]');
-            const title = titleEl?.textContent?.trim() || '';
-            const url = titleEl?.getAttribute('href') || '';
+            // Заголовок и URL - улучшенная логика
+            let title = '';
+            let url = '';
             
+            // Сначала ищем ссылку на конкретный документ (/ru/document?id_4=...)
+            const docLink = card.querySelector('a[href*="/ru/document?id_4="]');
+            if (docLink) {
+              url = docLink.getAttribute('href') || '';
+            } else {
+              // fallback: ищем любую ссылку на /document/
+              const anyDocLink = card.querySelector('a[href*="/document/"]');
+              if (anyDocLink) {
+                url = anyDocLink.getAttribute('href') || '';
+              }
+            }
+            // Если url относительный, добавляем https://minfin.gov.ru
+            if (url && url.startsWith('/')) {
+              url = 'https://minfin.gov.ru' + url;
+            }
+            // Заголовок
+            if (!title) {
+              const titleEl = card.querySelector('.document_title, .title, h3, h4, .document-name, .news-title, a[href]');
+              title = titleEl?.textContent?.trim() || '';
+            }
+            // Логируем для отладки
+            console.log(`[PARSER] Найдена новость: "${title}" -> URL: ${url}`);
             // Дата публикации: ищем текст "Опубликовано: DD.MM.YYYY"
             let publishedDate = '';
             const allEls = Array.from(card.querySelectorAll('*'));
